@@ -60,11 +60,11 @@ async function main() {
 
     ensureDir(CONFIG_DIR);
 
-    const toolName = input.tool_name || input.tool || 'unknown';
-    const toolInput = input.tool_input || input.input || {};
-    const toolOutput = input.tool_output || input.output || '';
+    const toolName = input.tool_name || 'unknown';
+    const toolInput = input.tool_input || {};
+    const toolOutput = input.tool_result || '';
     const sessionId = input.session_id || 'unknown';
-    const hookType = input.hook_type || 'unknown';
+    const hookType = input.hook_event_name || 'unknown';
 
     // Truncate large inputs/outputs
     let inputStr;
