@@ -1,0 +1,48 @@
+# ===== 密钥和个人配置 =====
+settings.json
+.claude/
+.credentials.json
+glo.env
+
+# ===== 运行时数据 =====
+homunculus/observations.*
+homunculus/observer.log
+sessions/
+cache/
+debug/
+telemetry/
+statsig/
+shell-snapshots/
+file-history/
+tasks/
+todos/
+plans/
+projects/
+ide/
+session-env/
+paste-cache/
+
+# ===== 旧系统/备份 =====
+/hooks/
+memory-backup-v2/
+memory/
+plugins/
+mcp-servers/Seedream_MCP/
+
+# ===== 第三方 Skills =====
+skills/ui-ux-pro-max/
+skills/skills-updater/
+skills/vue-best-practices/
+skills/chroma/
+skills/frontend-design/
+skills/github-to-skills/
+skills/skill-creator/
+skills/write-xiaohongshu/
+
+# ===== 系统/临时文件 =====
+nul
+*.bak
+*.zip
+__pycache__/
+history.jsonl
+stats-cache.json

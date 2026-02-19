@@ -1,0 +1,32 @@
+{
+  "zhuanlan\\.zhihu\\.com": {
+    "title_selector": ".Post-Title",
+    "content_selector": ".Post-RichTextContainer, .RichText",
+    "author_selector": ".AuthorInfo-name",
+    "preferred_strategy": "browser",
+    "wait_selector": ".Post-RichTextContainer"
+  },
+  "zhihu\\.com/question": {
+    "title_selector": ".QuestionHeader-title",
+    "content_selector": ".RichContent-inner",
+    "preferred_strategy": "browser"
+  },
+  "mp\\.weixin\\.qq\\.com": {
+    "title_selector": "#activity-name",
+    "content_selector": "#js_content",
+    "author_selector": "#js_name",
+    "date_selector": "#publish_time",
+    "preferred_strategy": "browser",
+    "wait_selector": "#js_content"
+  },
+  "sspai\\.com": {
+    "title_selector": ".title",
+    "content_selector": ".article-body",
+    "preferred_strategy": "light"
+  },
+  "medium\\.com": {
+    "title_selector": "h1",
+    "content_selector": "article",
+    "preferred_strategy": "light"
+  }
+}

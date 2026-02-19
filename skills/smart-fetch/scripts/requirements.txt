@@ -1,0 +1,5 @@
+curl_cffi
+DrissionPage
+readability-lxml
+markdownify
+lxml
