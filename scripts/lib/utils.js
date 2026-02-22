@@ -244,11 +244,26 @@ function replaceInFile(filePath, search, replace) {
 }
 
 function countInFile(filePath, pattern) {
-  const content = readFile(filePath);
-  if (content === null) return 0;
-  const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern, 'g');
-  const matches = content.match(regex);
-  return matches ? matches.length : 0;
+  try {
+    const regex = pattern instanceof RegExp ? new RegExp(pattern.source, 'g') : new RegExp(pattern, 'g');
+    let count = 0;
+    const buf = fs.readFileSync(filePath, 'utf8');
+    // For files > 5MB, count line by line to avoid regex backtracking on huge strings
+    if (buf.length > 5 * 1024 * 1024) {
+      const lines = buf.split('\n');
+      for (const line of lines) {
+        const m = line.match(regex);
+        if (m) count += m.length;
+        regex.lastIndex = 0;
+      }
+    } else {
+      const m = buf.match(regex);
+      count = m ? m.length : 0;
+    }
+    return count;
+  } catch {
+    return 0;
+  }
 }
 
 function grepFile(filePath, pattern) {

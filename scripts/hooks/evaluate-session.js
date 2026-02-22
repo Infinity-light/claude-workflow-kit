@@ -49,15 +49,36 @@ function filterObservationsBySession(sessionId) {
 }
 
 async function main() {
-  const transcriptPath = process.env.CLAUDE_TRANSCRIPT_PATH;
-  const sessionId = process.env.CLAUDE_SESSION_ID;
+  // Claude Code passes hook data via stdin as JSON
+  let stdinData = '';
+  try {
+    process.stdin.setEncoding('utf8');
+    for await (const chunk of process.stdin) {
+      stdinData += chunk;
+    }
+  } catch {}
 
-  if (!transcriptPath || !fs.existsSync(transcriptPath)) {
+  let transcriptPath, sessionId;
+  if (stdinData.trim()) {
+    try {
+      const input = JSON.parse(stdinData);
+      transcriptPath = input.transcript_path;
+      sessionId = input.session_id;
+    } catch {}
+  }
+
+  if (!transcriptPath) {
+    appendLog('SKIP: no transcript_path in stdin');
+    process.exit(0);
+  }
+  if (!fs.existsSync(transcriptPath)) {
+    appendLog(`SKIP: transcript not found: ${transcriptPath}`);
     process.exit(0);
   }
 
   const messageCount = countInFile(transcriptPath, /"type":"user"/g);
   if (messageCount < MIN_SESSION_LENGTH) {
+    appendLog(`SKIP: only ${messageCount} user messages (need ${MIN_SESSION_LENGTH})`);
     process.exit(0);
   }
 

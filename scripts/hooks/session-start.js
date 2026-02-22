@@ -46,6 +46,28 @@ async function main() {
     log(`[SessionStart] ${learnedSkills.length} learned skill(s) available in ${learnedDir}`);
   }
 
+  // Load instincts into session context (output to stdout so Claude can see them)
+  const instinctsDir = path.join(getClaudeDir(), 'homunculus', 'instincts', 'personal');
+  const instinctLines = [];
+  if (fs.existsSync(instinctsDir)) {
+    const instinctFiles = findFiles(instinctsDir, '*.md');
+    if (instinctFiles.length > 0) {
+      instinctLines.push(`[直觉系统] 已加载 ${instinctFiles.length} 条经验：`);
+      for (const f of instinctFiles) {
+        try {
+          const content = fs.readFileSync(f.path, 'utf8');
+          const trigger = content.match(/^trigger:\s*"?(.+?)"?\s*$/m)?.[1] || '';
+          const action = content.match(/## Action\n([\s\S]*?)(?:\n##|$)/)?.[1]?.trim() || '';
+          const confidence = content.match(/^confidence:\s*(.+)$/m)?.[1] || '?';
+          if (trigger && action) {
+            instinctLines.push(`  - [${confidence}] 当${trigger} → ${action.slice(0, 150)}`);
+          }
+        } catch {}
+      }
+      log(instinctLines.join('\n')); // stderr for terminal logging
+    }
+  }
+
   // Check for available session aliases
   const aliases = listAliases({ limit: 5 });
 
@@ -78,19 +100,31 @@ async function main() {
     }
   }
 
+  const contextLines = [];
+
+  // Collect instinct context for Claude
+  if (instinctLines.length > 0) {
+    contextLines.push(...instinctLines);
+  }
+
+  // Collect phase context for Claude
   if (phaseState && phaseState.current_phase && phaseState.current_phase !== 'idle') {
-    log(`[系统] 当前阶段：${phaseState.current_phase}`);
-    log(`[系统] 请执行：Skill(skill: "${phaseState.current_phase}")`);
+    contextLines.push(`[系统] 当前阶段：${phaseState.current_phase}`);
+    contextLines.push(`[系统] 请执行：Skill(skill: "${phaseState.current_phase}")`);
     if (phaseState.task_ref) {
-      log(`[系统] 任务引用：${phaseState.task_ref}`);
+      contextLines.push(`[系统] 任务引用：${phaseState.task_ref}`);
     }
   }
 
-  // Detect and report package manager
+  // Output to stdout so Claude receives it as context
+  if (contextLines.length > 0) {
+    console.log(contextLines.join('\n'));
+  }
+
+  // Detect and report package manager (stderr only, not needed in Claude context)
   const pm = getPackageManager();
   log(`[SessionStart] Package manager: ${pm.name} (${pm.source})`);
 
-  // If package manager was detected via fallback, show selection prompt
   if (pm.source === 'fallback' || pm.source === 'default') {
     log('[SessionStart] No package manager preference found.');
     log(getSelectionPrompt());

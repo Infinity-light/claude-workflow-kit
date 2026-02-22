@@ -7,6 +7,9 @@ glo.env
 # ===== 运行时数据 =====
 homunculus/observations.*
 homunculus/observer.log
+homunculus/instincts/
+homunculus/hook-debug.json
+homunculus/verify-stderr.log
 sessions/
 cache/
 debug/

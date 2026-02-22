@@ -62,7 +62,7 @@ async function main() {
 
     const toolName = input.tool_name || 'unknown';
     const toolInput = input.tool_input || {};
-    const toolOutput = input.tool_result || '';
+    const toolOutput = input.tool_response || '';
     const sessionId = input.session_id || 'unknown';
     const hookType = input.hook_event_name || 'unknown';
 
