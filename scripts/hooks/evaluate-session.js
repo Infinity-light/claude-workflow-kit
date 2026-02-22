@@ -29,6 +29,8 @@ const PROMPT_FILE = path.join(HOMUNCULUS_DIR, 'observer-prompt.md');
 const LOG_FILE = path.join(HOMUNCULUS_DIR, 'observer.log');
 const MIN_SESSION_LENGTH = 5;
 const MIN_OBSERVATIONS = 5;
+const MAX_USER_MSG_CHARS = 8000;
+const MAX_SINGLE_MSG_CHARS = 500;
 
 function appendLog(msg) {
   const ts = new Date().toISOString();
@@ -46,6 +48,36 @@ function filterObservationsBySession(sessionId) {
       return obj.session && obj.session === sessionId;
     } catch { return false; }
   });
+}
+
+function extractUserMessages(transcriptPath) {
+  try {
+    const lines = fs.readFileSync(transcriptPath, 'utf8').split('\n').filter(Boolean);
+    const msgs = [];
+    let totalLen = 0;
+    for (const line of lines) {
+      if (totalLen >= MAX_USER_MSG_CHARS) break;
+      try {
+        const obj = JSON.parse(line);
+        if (obj.message?.role !== 'user') continue;
+        const content = obj.message.content;
+        let text = '';
+        if (typeof content === 'string') {
+          text = content;
+        } else if (Array.isArray(content)) {
+          text = content
+            .filter(b => b.type === 'text')
+            .map(b => b.text)
+            .join('\n');
+        }
+        if (!text.trim()) continue;
+        const truncated = text.slice(0, MAX_SINGLE_MSG_CHARS);
+        msgs.push(truncated);
+        totalLen += truncated.length;
+      } catch {}
+    }
+    return msgs.join('\n---\n');
+  } catch { return ''; }
 }
 
 async function main() {
@@ -97,6 +129,10 @@ async function main() {
   }
   ensureDir(INSTINCTS_DIR);
   prompt = prompt.replace(/\{\{OBSERVATIONS\}\}/g, sessionObs.join('\n'));
+
+  // Inject user messages from transcript
+  const userMsgs = extractUserMessages(transcriptPath);
+  prompt = prompt.replace(/\{\{USER_MESSAGES\}\}/g, userMsgs || '(无用户消息)');
 
   // Check claude CLI available
   if (!commandExists('claude')) {
