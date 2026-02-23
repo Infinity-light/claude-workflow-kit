@@ -24,6 +24,8 @@ projects/
 ide/
 session-env/
 paste-cache/
+backups/
+image-cache/
 
 # ===== 旧系统/备份 =====
 /hooks/
