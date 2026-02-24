@@ -1,6 +1,6 @@
 ---
 name: verification
-description: 部署后验证阶段。当 deploy 完成后触发，使用 agent-browser 子代理对生产环境做针对性验证，验证通过后加载 documentation-update skill 更新文档。当用户说"验证"、"verify"、"检查部署结果"、"测一下线上"时触发。
+description: 部署后验证阶段。当 deploy 完成后触发，使用 Puppeteer MCP 对生产环境做针对性验证（支持 JavaScript 执行），验证通过后加载 documentation-update skill 更新文档。当用户说"验证"、"verify"、"检查部署结果"、"测一下线上"时触发。
 ---
 
 ## 铁律
@@ -37,18 +37,20 @@ gh run list --limit 1
 - **变更验证点**：本轮改了什么，就验证什么
 - **冒烟验证点**：核心流程快速过一遍（登录、主要页面可访问）
 
-### 3. 调度 agent-browser 子代理验证
+### 3. 使用 Puppeteer MCP 验证
 
-启动 Task 子代理，使用 agent-browser skill 执行验证：
-- 将变更验证点和冒烟验证点作为测试指令传入
-- 子代理使用 `agent-browser open/snapshot/screenshot` 逐一验证
-- 子代理只返回发现的问题，无问题则返回"全部通过"
+使用 `mcp__puppeteer__puppeteer_navigate` 和 `mcp__puppeteer__puppeteer_screenshot` 执行验证：
+- 将变更验证点和冒烟验证点作为测试指令
+- 使用 Puppeteer 逐一验证（支持 JavaScript 执行，适用于 Vue/React SPA）
+- 截图验证桌面端和移动端效果
+- 返回发现的问题，无问题则返回"全部通过"
 
-**子代理 prompt 必须包含**：
+**验证必须包含**：
 - 生产环境 URL
 - 测试账号（如需登录）
 - 本轮变更的具体验证点
 - 冒烟验证的页面列表
+- 移动端响应式验证（375x667 viewport）
 
 ### 4. 处理验证结果
 

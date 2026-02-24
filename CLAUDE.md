@@ -21,7 +21,6 @@
 | diagnosis / 诊断 / 排查 | diagnosis |
 | deploy / 部署 / 上线 | deploy |
 | verification / 验证 / 检查 | verification |
-| self-evolve / 自迭代 / 演进 | self-evolve |
 | skill-creator / 创建skill | skill-creator |
 
 **这不是建议，是硬性规则**：看到关键词 → 调用 Skill 工具 → 然后才输出内容。不需要先问"是否要进入XX阶段"，不需要先分析用户意图，直接加载。
@@ -33,7 +32,7 @@
 | # | 判断问题 | 加载的 Skill |
 |---|---------|-------------|
 | 1 | 现实与预期出现了偏差？ | diagnosis |
-| 2 | 用户在谈系统或 Skill 本身？ | self-evolve / skill-creator |
+| 2 | 用户在谈系统或 Skill 本身？ | skill-creator |
 | 3 | 我确定理解用户真正想要什么吗？ | discovery |
 | 4 | 目标清楚，但不知道怎么实现？ | planning |
 | 5 | 目标和路径都清楚？ | execution |
@@ -41,10 +40,6 @@
 **默认规则**：拿不准时，走 discovery。
 
 ## 阶段管理
-
-会话开始时，系统会自动提醒你当前所处的阶段和需要加载的 Skill。按提醒操作即可。
-
-阶段转换通过 AskUserQuestion 的用户确认触发，系统自动追踪。
 
 ```
 discovery → planning → execution → deploy → verification
@@ -92,30 +87,3 @@ discovery → planning → execution → deploy → verification
 - 非开发阶段不输出代码，用文字描述代替
 - 进行逻辑推理时，多举真实例子
 - 始终站在用户角度思考问题
-
-## 记忆与学习系统（ECC 架构）
-
-基于 everything-claude-code 的 Homunculus 系统，Hook 捕获 + LLM 提炼 + 直觉演进。
-
-### Hook 链（自动运行）
-- **SessionStart**: session-start.js → 加载上次会话上下文、检测包管理器、注入阶段提醒
-- **PostToolUse**: observe.js → 捕获工具调用；phase-manager.js → 检测阶段转换
-- **PreToolUse**: suggest-compact.js → 在逻辑边界建议 /compact
-- **PreCompact**: pre-compact.js → compact 前保存状态
-- **Stop**: check-console-log.js → 检查修改文件中的 console.log
-- **SessionEnd**: session-end.js + evaluate-session.js
-
-### 直觉系统（Instincts）
-- 存储：`~/.claude/homunculus/instincts/personal/`（自学习）和 `inherited/`（导入）
-- 格式：YAML frontmatter + Markdown，含 trigger/action/confidence/domain
-- 置信度：0.3-0.9，确认+0.05，矛盾-0.1，每周衰减-0.02
-- 演进：直觉聚类 → Skill / Command / Agent
-
-### 命令
-- `/learn` — 从当前会话提取可复用模式
-- `/instinct-status` — 查看所有直觉状态
-- `/evolve` — 聚类直觉为更高级结构
-
-### 会话持久化
-- `~/.claude/sessions/` — 每日会话文件（Markdown 格式）
-- 自动跟踪完成项、进行中项、下次会话备注
