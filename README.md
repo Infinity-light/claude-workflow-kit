@@ -1,6 +1,6 @@
 # Claude Workflow Kit
 
-一套运行在 Claude Code 之上的工作流系统。通过 CLAUDE.md 指令层、Skills 能力层、Hooks 自动化层三层协作，实现阶段驱动的任务管理和持续学习。
+一套运行在 Claude Code 之上的 Skill-First 工作流系统。通过 CLAUDE.md 指令层和 Skills 能力层的双层协作，实现阶段驱动的任务管理。
 
 ## 架构总览
 
@@ -15,195 +15,50 @@
 │                    Skills 层                         │
 │  discovery · planning · execution · diagnosis · ...  │
 │         （Claude 通过 Skill 工具按需加载）              │
-└──────────────────────┬──────────────────────────────┘
-                       │ 触发 / 被观察
-┌──────────────────────▼──────────────────────────────┐
-│                    Hooks 层                          │
-│  session-start · observe · phase-manager · ...       │
-│         （Claude Code 在生命周期事件时自动执行）         │
-└──────────────────────┬──────────────────────────────┘
-                       │ 写入 / 读取
-┌──────────────────────▼──────────────────────────────┐
-│                 Homunculus 持久层                     │
-│     observations.jsonl · instincts/ · sessions/      │
-│         （跨会话持久化的学习数据）                      │
 └─────────────────────────────────────────────────────┘
 ```
 
-## 一次会话的完整生命周期
+## 核心原则：Skill-First
 
-### 1. 会话启动
+**Skill 是唯一的工作单元。整个工作流不是"流程里偶尔调用 Skill"，而是"一切工作都是 Skill 的编排"。**
 
-```
-Claude Code 启动
-    │
-    ├─→ 自动加载 CLAUDE.md（阶段路由表、行为规范）
-    │
-    └─→ 触发 SessionStart 事件
-            │
-            └─→ session-start.js
-                  ├─ 扫描 sessions/ 找最近 7 天的会话文件
-                  ├─ 读取 projects/<项目>/phase-state.json
-                  ├─ 如果有未完成的阶段，输出提醒：
-                  │    "[系统] 当前阶段：planning"
-                  │    "[系统] 请执行：Skill(skill: "planning")"
-                  └─ 检测包管理器（npm/yarn/pnpm）
-```
+### 四层 Skill-First 法则
 
-### 2. 用户发出请求
+**第一层：优先使用现有 Skill**
+做任何事之前，先问一个问题：**有没有对应的 Skill？**
+- 有 → 立即加载，按 Skill 指导执行
+- 没有 → 进入第二层
 
-```
-用户输入
-    │
-    └─→ Claude 根据 CLAUDE.md 中的阶段路由表判断：
-          │
-          ├─ 现实与预期有偏差？        → Skill("diagnosis")
-          ├─ 在谈系统/Skill 本身？     → Skill("self-evolve")
-          ├─ 不确定用户真正想要什么？    → Skill("discovery")
-          ├─ 目标清楚但不知道怎么做？    → Skill("planning")
-          └─ 目标和路径都清楚？         → Skill("execution")
-```
+**第二层：遇到困境，先找 Skill 市场**
+当现有 Skill 无法覆盖当前任务时，**先用 find-skills 搜索市场上是否有可用的 Skill**，不要直接自己动手硬做。
 
-### 3. 工作过程中
+**第三层：没有 Skill，找 GitHub 项目并考虑转化**
+如果市场上也没有对应的 Skill，去搜索有没有成熟的 GitHub 项目能实现这个功能。找到后考虑用 `skill-creator` 将其转化为 Skill。
 
-每次 Claude 调用工具（Edit/Write/Bash/Read/Grep/Glob），都会触发两条 Hook 链：
+**第四层：任务完成后，反哺 Skill 体系**
+每次任务完成后，主动思考：
+- 现有 Skill 是否需要优化/迭代？→ 用 `skill-creator` 更新
+- 这次积累的经验能否 Skill 化？→ 用 `skill-creator` 创建新 Skill
+
+## 阶段路由
 
 ```
-Claude 调用工具（如 Edit）
-    │
-    ├─→ PreToolUse 事件（Edit|Write 时触发）
-    │       └─→ suggest-compact.js
-    │             └─ 计数器 +1，达到 50 次时提醒考虑 /compact
-    │
-    ├─→ [工具实际执行]
-    │
-    └─→ PostToolUse 事件
-            ├─→ observe.js（matcher: Edit|Write|Bash|Read|Grep|Glob）
-            │     └─ 将工具名、输入、输出写入 homunculus/observations.jsonl
-            │
-            └─→ phase-manager.js（matcher: AskUserQuestion）
-                  └─ 检测用户回答中是否包含阶段转换关键词
-                     如 "进入 Planning" → 写入 phase-state.json
-                     → 输出 "[系统] 阶段已切换到 planning"
+discovery → planning → execution → deploy → verification → documentation-update
+                                     ↑          ↓          ↓
+                                     └── diagnosis ←───────┘
 ```
 
-### 4. 阶段转换
+### 路由规则
 
-```
-Claude 通过 AskUserQuestion 询问用户是否切换阶段
-    │
-    └─→ 用户选择 "进入 Planning"
-          │
-          ├─→ phase-manager.js 捕获到关键词
-          │     └─ 更新 projects/<项目>/phase-state.json
-          │          { "current_phase": "planning", "last_transition": "..." }
-          │
-          └─→ Claude 加载对应 Skill
-                └─ Skill("planning") → 展开 skills/planning/SKILL.md 的完整指令
-```
+1. **用户在报告 bug、错误、异常、"不对"、"出问题了"** → 加载 `diagnosis`
+2. **用户明确要求修改 Skill 系统本身** → 加载 `skill-creator`
+3. **其他所有情况，一律加载 `discovery`**
 
-阶段流转图：
-
-```
-discovery → planning → execution → documentation-update → deploy
-     ↑           ↑          ↓              ↓                  ↓
-     └───────────┴──────── diagnosis ←─────┴──────────────────┘
-```
-
-### 5. 上下文压缩
-
-```
-Claude 即将执行 /compact
-    │
-    └─→ PreCompact 事件
-          └─→ pre-compact.js
-                ├─ 在 sessions/compaction-log.txt 记录压缩时间
-                └─ 在当前会话文件中插入压缩标记
-```
-
-### 6. 会话结束
-
-```
-Claude 会话结束
-    │
-    ├─→ Stop 事件
-    │     └─→ check-console-log.js
-    │           └─ 扫描 git diff 中的 .js/.ts 文件
-    │              如果发现 console.log → 输出警告
-    │
-    └─→ SessionEnd 事件
-          ├─→ session-end.js
-          │     └─ 创建/更新 sessions/YYYY-MM-DD-<id>-session.tmp
-          │        记录会话时间、完成项、进行中项
-          │
-          └─→ evaluate-session.js（学习系统入口）
-                ├─ 读取 observations.jsonl 中本次会话的记录
-                ├─ 如果观察数 < 5 或会话消息数 < 5 → 跳过
-                └─ 满足条件 → 启动学习流程（见下节）
-```
-
-## 学习系统（Homunculus）
-
-从观察到直觉的完整链路：
-
-```
-observe.js                     evaluate-session.js              run-observer.js
- (每次工具调用)                   (会话结束时)                      (后台进程)
-     │                               │                               │
-     │ 追加写入                       │ 过滤本会话记录                  │
-     ▼                               ▼                               ▼
-observations.jsonl ──────→ 嵌入 observer-prompt.md ──────→ claude --model haiku
-                                                                     │
-                                                              解析 ===INSTINCT=== 块
-                                                                     │
-                                                                     ▼
-                                                          instincts/personal/<id>.md
-                                                          (YAML frontmatter + Markdown)
-                                                          ┌─────────────────────┐
-                                                          │ id: xxx             │
-                                                          │ trigger: "..."      │
-                                                          │ confidence: 0.3-0.85│
-                                                          │ domain: workflow    │
-                                                          │ # Title            │
-                                                          │ ## Action           │
-                                                          │ ## Evidence         │
-                                                          └─────────────────────┘
-```
-
-直觉的生命周期：
-- 首次检测到模式 → confidence 0.3
-- 被用户确认 → +0.05
-- 与用户行为矛盾 → -0.1
-- 每周自然衰减 → -0.02
-- 达到 0.7+ → 可通过 `/evolve` 聚类为 Skill/Command/Agent
-
-## 组件依赖关系
-
-```
-scripts/hooks/*.js
-    └─→ 依赖 scripts/lib/
-          ├── utils.js          # 文件操作、路径、日期工具函数
-          ├── session-manager.js # 会话文件管理
-          ├── session-aliases.js # 会话别名
-          └── package-manager.js # 包管理器检测
-
-skills/continuous-learning-v2/
-    ├── SKILL.md                # /learn /instinct-status /evolve 命令定义
-    ├── config.json             # 观察/直觉/演进的参数配置
-    ├── agents/observer.md      # 观察器 agent 定义
-    └── scripts/instinct-cli.py # 直觉管理 CLI
-
-homunculus/
-    ├── observer-prompt.md      # LLM 提炼用的 prompt 模板
-    ├── observations.jsonl      # observe.js 写入，evaluate-session.js 读取
-    ├── instincts/personal/     # run-observer.js 写入，self-evolve Skill 读取
-    ├── instincts/inherited/    # 手动导入的外部直觉
-    └── evolved/                # /evolve 产出的高级结构
-```
+Discovery 是唯一入口，负责理解用户意图后引导进入正确的下一阶段。
 
 ## Skills 清单
 
-### 阶段管理（核心）
+### 核心阶段 Skills
 
 | Skill | 调用时机 | 职责 |
 |-------|----------|------|
@@ -211,51 +66,87 @@ homunculus/
 | planning | 目标清楚，路径不清楚 | 设计可行的执行方案 |
 | execution | 目标和路径都清楚 | 通过 Subagent 高效执行 |
 | diagnosis | 出现问题/错误/偏差 | 找到根因并解决 |
-| self-evolve | 查看/应用学习积累 | 将成熟直觉演进为 Skill |
-| documentation-update | 功能完成后 | 确保文档与代码一致 |
 | deploy | 部署上线 | 部署与环境同步 |
+| verification | 部署完成后 | 验证部署结果 |
+| documentation-update | 功能完成后 | 确保文档与代码一致 |
 
-### 功能增强
+### 功能增强 Skills
 
 | Skill | 职责 |
 |-------|------|
-| continuous-learning-v2 | 直觉学习系统的管理界面（/learn /evolve） |
-| smart-fetch | 反爬站点的智能抓取（curl_cffi → DrissionPage → Jina 三级降级） |
+| skill-creator | 创建和更新 Skill |
+| skills-updater | 检查和更新已安装的 Skills |
 | key-reader | 安全读取外部 API 密钥 |
-| recall | 从历史会话中召回相关记忆 |
-| agent-browser | 浏览器自动化 CLI |
+| smart-fetch | 反爬站点的智能网页抓取 |
+| ui-ux-pro-max | UI/UX 设计增强 |
+| frontend-design | 前端组件开发 |
+| vue-best-practices | Vue 3 最佳实践 |
+| github-to-skills | 将 GitHub 项目转化为 Skill |
+| write-xiaohongshu | 小红书笔记创作 |
+| chroma | Chroma 向量数据库集成 |
+
+## 行为规范
+
+### 绝对铁律
+
+- **所有代码撰写必须通过 Task 工具调用 Subagent 完成。没有任何例外。**
+- 主 Agent 专注于**思考和调度**，禁止在 Execution 阶段直接使用 Edit/Write 工具
+- Discovery 是唯一入口，不要自作主张跳过 discovery 直接进 planning 或 execution
+
+### 反合理化检查
+
+如果你脑子里出现以下想法，立刻停下：
+
+| 想法 | 真相 |
+|------|------|
+| "这次可以例外" | 不可以。例外一开就停不住 |
+| "任务太简单不需要走流程" | 简单任务走流程成本极低，不走流程出错成本极高 |
+| "先做着看" | 先做着看 = 返工。先想清楚再做 |
+| "差不多就行了" | 差不多 = 没做完 |
+| "就改一行，不用开子代理" | 一行也是代码。主Agent 碰代码 = 违规 |
 
 ## 环境配置：glo.env
 
-`glo.env` 是整个系统的密钥和基础设施配置中心，不入库（含敏感信息）。`key-reader` Skill 从此文件读取密钥，多个 Skill 和 MCP 服务器依赖其中的配置。
+`glo.env` 是整个系统的密钥和基础设施配置中心，不入库（含敏感信息）。需要在 `~/.claude/glo.env` 中配置各 API 密钥和服务器信息。
 
-需要在 `~/.claude/glo.env` 中配置以下内容：
+## 项目结构
 
-```env
-# LLM API（smart-fetch、recall 等 Skill 可能调用）
-DEEPSEEK_API_KEY=
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-SILICONFLOW_API_KEY=
-SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
-AIPING_API_KEY=
-AIPING_BASE_URL=https://aiping.cn/api/v1
-
-# 容器镜像仓库
-GHCR_PAT=
-
-# 开发服务器
-IP=
-USER_NAME=
-PASSWORD=
-
-# 火山引擎（Seedream MCP 生图）
-ARK_API_KEY=
+```
+~/.claude/
+├── CLAUDE.md              # 核心行为指令
+├── glo.env                # 密钥配置（不入库）
+├── README.md              # 本文档
+├── skills/                # Skill 目录
+│   ├── discovery/
+│   ├── planning/
+│   ├── execution/
+│   ├── diagnosis/
+│   ├── deploy/
+│   ├── verification/
+│   ├── documentation-update/
+│   ├── key-reader/
+│   ├── smart-fetch/
+│   ├── ui-ux-pro-max/
+│   ├── skill-creator/
+│   └── ...
+├── scripts/               # 工具脚本
+│   └── scan_contracts.py  # 项目进度扫描
+├── projects/              # 项目状态存储
+├── tasks/                 # 任务追踪
+└── plans/                 # 计划文件
 ```
 
 ## 安装
 
 ```bash
 git clone <repo-url> ~/.claude
-node ~/.claude/setup.js        # 注入 hooks 配置到 settings.json
-# 然后创建 glo.env 并填入你的密钥
+# 创建 glo.env 并填入你的密钥
+touch ~/.claude/glo.env
 ```
+
+## 使用流程
+
+1. **开始新任务**：Claude 会自动加载 CLAUDE.md，根据用户输入路由到对应 Skill
+2. **遵循 Skill 指导**：每个 Skill 都有详细的执行指南，严格按照指南执行
+3. **阶段推进**：当前阶段完成后，Skill 会引导用户选择下一步
+4. **沉淀经验**：任务完成后，如有改进建议，使用 `skill-creator` 更新相关 Skill
